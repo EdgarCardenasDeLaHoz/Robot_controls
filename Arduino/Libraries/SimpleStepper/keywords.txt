@@ -1,0 +1,24 @@
+#######################################
+# Syntax Coloring Map For SimpleStepper
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+SimpleStepper	KEYWORD1	SimpleStepper
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+setSpeed	KEYWORD2
+setSteps	KEYWORD2
+setRevs		KEYWORD2
+run		KEYWORD2
+
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
