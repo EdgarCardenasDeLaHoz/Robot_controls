@@ -43,7 +43,7 @@ void setup() {
   SCmd.addCommand("STOP", stop_all);
   SCmd.addCommand("Info", send_info);
   SCmd.addCommand("Pos", send_position);
-  SCmd.addCommand("R", check_move_complete);
+  SCmd.addCommand("Ready", check_move_complete);
   SCmd.addDefaultHandler(unrecognized);
 
   Serial.begin(9600);
