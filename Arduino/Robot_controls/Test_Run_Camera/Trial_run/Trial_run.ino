@@ -1,13 +1,3 @@
-/*
-  Op3Mech controller
-
-  Designed to be used with the CNC shield V3.
-
-  Created 26/07/2020
-
-  By Jona Gladines
-  For Op3Mech
-*/
 
 #include <SoftwareSerial.h>                         //libraries for the processing of the serial command and to controll the stepper motors
 #include <SerialCommand.h>
@@ -36,21 +26,15 @@ void setup() {
     steppers[i].setAcceleration(10000);
   }
 
-  SCmd.addCommand("M", move_stepper);
-  SCmd.addCommand("V", change_velocity);
-  SCmd.addCommand("STOP", stop_all);
-  SCmd.addCommand("Info", send_info);
-  SCmd.addCommand("Pos", send_position);
-  SCmd.addCommand("Ready", check_move_complete);
-  SCmd.addDefaultHandler(unrecognized);
-
+  SCmd.addCommand("Start", move_stepper);
+  
   Serial.begin(9600);
   Serial.println("Robotic Arm");
   //
 }
 
 void loop() {
-  SCmd.readSerial();                             //check if there are serial commands, if so, process them
+  SCmd.readSerial();
   for (int i = 0; i <= 3; i++) {                    //set the maximum speed and acceleration for the stepper motors
     steppers[i].run();
   }
@@ -60,47 +44,6 @@ void loop() {
     lastMillis = millis();  //get ready for the next iteration
     check_move_complete();
   }
-}
-
-// This gets set as the default handler, and gets called when no other command matches.
-void unrecognized()
-{
-  Serial.println("Not recognized");            //returns not ok to software
-
-}
-
-
-void send_info() {
-  Serial.println("Robot Arm");
-}
-
-
-void send_position() {
-  Serial.println("Robot Arm");
-}
-
-
-void change_velocity()    //function called when a serial command is received
-{
-  char *arg;
-  float velocity;
-
-  arg = SCmd.next();
-  if (arg == NULL) {
-    Serial.println("Not recognized: No Velocity given");
-    return;
-  }
-
-  velocity = atoi(arg);
-  if (velocity == 0) {
-    Serial.println("Not recognized: Velocity parameter could not get parsed");
-    return;
-  }
-
-  for (int i = 0; i <= 3; i++) {
-    steppers[i].setMaxSpeed(velocity);
-  }
-
 }
 
 void check_move_complete() {
@@ -128,32 +71,15 @@ void check_move_complete() {
 
 }
 
-void stop_all() {
-  for (int i = 0; i <= 3; i++) {
-    steppers[i].move(0);
-  }
-}
-
 
 void move_stepper() {
-
+  float amount_X;
+  float distance_X;
+  float amount_Y;
+  float distance_Y;
+  
   char *arg;
   int step_idx;
-  float distance;
-
-  arg = SCmd.next();
-  if (arg == NULL)  {
-    Serial.println("Not recognized: Stepper Number" );
-    return;
-  }
-
-  step_idx = atoi(arg);
-  if (step_idx < 0) {
-    Serial.print("Not recognized:");   Serial.println(step_idx);  return;
-
-    Serial.print("ID ");
-    Serial.print(step_idx );
-  }
 
   arg = SCmd.next();
   if (arg == NULL)   {
@@ -161,19 +87,61 @@ void move_stepper() {
     return;
   }
 
-  distance = atof(arg);
-  if (distance == 0) {
+  amount_X = atof(arg);
+  if (amount_X == 0) {
     Serial.println("Not recognized: Height parameter not parsed");
     return;
   }
 
-  Serial.print("moving ");
-  Serial.print(distance);
-  Serial.println(" Degrees");
+  Serial.print("amount of pictures ");
+  Serial.print(amount_X);
+  Serial.println(" Degrees moved per picture");
 
-  distance = distance * 32 * 2.778;
-  steppers[step_idx].move(distance);
-  b_move_complete = false;
+  distance_X = 120 * 32 * 2.778 / (amount_X-1);
+  Serial.println(distance_X);
 
+  arg = SCmd.next();
+  if (arg == NULL)   {
+    Serial.println("Not recognized: No hieght parameter given");
+    return;
+  }
 
-}
+  amount_Y = atof(arg);
+  if (amount_Y == 0) {
+    Serial.println("Not recognized: Height parameter not parsed");
+    return;
+  }
+
+  Serial.print("amount of pictures ");
+  Serial.print(amount_Y);
+  Serial.println(" Degrees moved per picture");
+
+  distance_Y = 90 * 32 * 2.778 / (amount_Y-1);
+  Serial.println(distance_Y);
+  Serial.println(amount_Y);
+  Serial.println(amount_X);
+  Serial.println(distance_X);
+
+  for (int b=0 ; b < amount_Y ; b=b+1){
+    Serial.println("hallo");
+     if  (b % 2 == 0) {
+        for (int i=0 ; i < amount_X ; i=i+1){
+            steppers[0].move(distance_X);
+            delay(10);
+            Serial.println("Move x positive");
+            b_move_complete = false;
+        }
+     }
+     if (b % 2 != 0) {
+        for (int i=0 ; i < amount_X ; i=i+1){
+            steppers[0].move(-distance_X);
+            delay(10);
+            Serial.println("Move x negative");
+            b_move_complete = false;
+        }
+      }
+      steppers[1].move(distance_Y);
+      delay(10);
+      Serial.println("Move y");
+     }
+  }
