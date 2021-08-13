@@ -2,6 +2,8 @@
 #include <SoftwareSerial.h>                         //libraries for the processing of the serial command and to controll the stepper motors
 #include <SerialCommand.h>
 #include <AccelStepper.h>
+#include <Wire.h>
+#include <ArduinoJson.h>
 
 SerialCommand SCmd;                                 // The SerialCommand object
 
@@ -15,19 +17,21 @@ int stepperEnablePin = 8;                           //pin to enable stepper driv
 int uddir = 1;
 unsigned long lastMillis;
 bool b_move_complete = true;
+String info_command = "";
 
 void setup() {
-
   pinMode(stepperEnablePin, OUTPUT);
   digitalWrite(stepperEnablePin, LOW);
 
   for (int i = 0; i <= 3; i++) {                    //set the maximum speed and acceleration for the stepper motors
-    steppers[i].setMaxSpeed(25000);
-    steppers[i].setAcceleration(10000);
+    steppers[i].setMaxSpeed(2500);
+    steppers[i].setAcceleration(1000);
   }
-
-  SCmd.addCommand("Start", move_stepper);
-  
+  SCmd.addCommand("Start", sequence);
+  SCmd.addCommand("M", motor);
+  SCmd.addCommand("Home", go_home);
+  Wire.begin(8);
+  Wire.onReceive(receiveEvent);
   Serial.begin(9600);
   Serial.println("Robotic Arm");
   //
@@ -39,11 +43,14 @@ void loop() {
     steppers[i].run();
   }
 
-
   if (millis() - lastMillis >= 2 * 60 * 1000UL) {
     lastMillis = millis();  //get ready for the next iteration
     check_move_complete();
   }
+  if (info_command != ""){
+    wire_command();
+    delay(100);
+    }
 }
 
 void check_move_complete() {
@@ -71,77 +78,200 @@ void check_move_complete() {
 
 }
 
-
-void move_stepper() {
-  float amount_X;
-  float distance_X;
-  float amount_Y;
-  float distance_Y;
+void receiveEvent(int howMany) {
+ while (0 <Wire.available()) {
+    char c = Wire.read();   
+    info_command += c;
+  }
+  Serial.println(info_command);
   
-  char *arg;
+}
+
+void wire_command(){
+  int Start;
+  int amount_X;
+  int amount_Y;
   int step_idx;
-
-  arg = SCmd.next();
-  if (arg == NULL)   {
-    Serial.println("Not recognized: No hieght parameter given");
-    return;
-  }
-
-  amount_X = atof(arg);
-  if (amount_X == 0) {
-    Serial.println("Not recognized: Height parameter not parsed");
-    return;
-  }
-
-  Serial.print("amount of pictures ");
-  Serial.print(amount_X);
-  Serial.println(" Degrees moved per picture");
-
-  distance_X = 120 * 32 * 2.778 / (amount_X-1);
-  Serial.println(distance_X);
-
-  arg = SCmd.next();
-  if (arg == NULL)   {
-    Serial.println("Not recognized: No hieght parameter given");
-    return;
-  }
-
-  amount_Y = atof(arg);
-  if (amount_Y == 0) {
-    Serial.println("Not recognized: Height parameter not parsed");
-    return;
-  }
-
-  Serial.print("amount of pictures ");
-  Serial.print(amount_Y);
-  Serial.println(" Degrees moved per picture");
-
-  distance_Y = 90 * 32 * 2.778 / (amount_Y-1);
-  Serial.println(distance_Y);
-  Serial.println(amount_Y);
-  Serial.println(amount_X);
-  Serial.println(distance_X);
-
-  for (int b=0 ; b < amount_Y ; b=b+1){
-    Serial.println("hallo");
-     if  (b % 2 == 0) {
-        for (int i=0 ; i < amount_X ; i=i+1){
-            steppers[0].move(distance_X);
-            delay(10);
-            Serial.println("Move x positive");
-            b_move_complete = false;
-        }
-     }
-     if (b % 2 != 0) {
-        for (int i=0 ; i < amount_X ; i=i+1){
-            steppers[0].move(-distance_X);
-            delay(10);
-            Serial.println("Move x negative");
-            b_move_complete = false;
-        }
+  int distance_mm;
+  
+  DynamicJsonBuffer jsonBuffer;
+      JsonObject& root= jsonBuffer.parseObject(info_command);
+  if (root.success()) {
+         Start = atoi(root["Start"]);
+         amount_X = atoi(root["x"]);
+         amount_Y = atoi(root["y"]);
+         step_idx = atoi(root["M"]);
+         distance_mm = atoi(root["distance"]);
       }
-      steppers[1].move(distance_Y);
-      delay(10);
-      Serial.println("Move y");
-     }
+   if(Start == 1){
+    scan(amount_X,amount_Y);
+    }
+   if(step_idx == 1){
+    move_stepper(0,distance_mm);
+    }
+   if(step_idx == 2){
+    move_stepper(1,distance_mm);
+    }
+    
+   Start = 0;
+   amount_X = 0;
+   amount_Y = 0;
+   step_idx = 0;
+   distance_mm = 0;
+   info_command = "";
+  }
+
+void sequence(){
+  int amount_X;
+  int amount_Y;
+  char *arg;
+    
+  arg = SCmd.next();
+  
+    if (arg == NULL)   {
+      Serial.println("Not recognized: No hieght parameter given");
+      return;
+    }
+    
+  amount_X = atof(arg);
+    if (amount_X == 0) {
+      Serial.println("Not recognized: Height parameter not parsed");
+      return;
+    }
+
+  arg = SCmd.next();
+    if (arg == NULL)   {
+      Serial.println("Not recognized: No hieght parameter given");
+      return;
+    }
+  
+  amount_Y = atof(arg);
+    if (amount_Y == 0) {
+      Serial.println("Not recognized: Height parameter not parsed");
+      return;
+    }
+
+  scan(amount_X,amount_Y);
+  
+  }
+void motor(){
+  int idx;
+  int distance;
+  char *arg;
+    
+  arg = SCmd.next();
+  Serial.println(arg);
+  idx = atof(arg);
+  
+  arg = SCmd.next();
+    if (arg == NULL)   {
+      Serial.println("Not recognized: No hieght parameter given");
+      return;
+    }
+  
+  distance = atof(arg);
+    if (distance == 0) {
+      Serial.println("Not recognized: Height parameter not parsed");
+      return;
+    }
+  move_stepper(idx,distance);
+  }
+void scan(int X, int Y){
+  
+  float distance_X;
+  float distance_Y;
+ // Serial.println(X);
+  //Serial.println(Y);
+  //Serial.println("amount of pictures ");
+  //Serial.println(X);
+ // Serial.println("Degrees moved per picture");
+  distance_X = 120 * 32 * 2.778 / (X-1);
+ // Serial.println(distance_X);
+
+  //Serial.println(X);
+  //Serial.println(Y);
+  
+  //Serial.println("amount of pictures ");
+ // Serial.println(Y);
+ // Serial.println("Degrees moved per picture");
+  distance_Y = 90 * 32 * 2.778 / (Y-1);
+
+  for (int b=0 ; b < Y ; b=b+1){
+     // Serial.println("hallo");
+      if  (b % 2 == 0) {
+          for (int i=0 ; i < X-1 ; i=i+1){
+              steppers[0].move(distance_X);
+              while (steppers[0].isRunning() == 1) {
+                  steppers[0].run();
+              }
+              delay(100);
+              //Serial.println("Move x positive");
+              b_move_complete = false;         
+              Serial.println(".");
+            }
+          }
+      if (b % 2 != 0) {
+          for (int i=0 ; i < X-1 ; i=i+1){
+              steppers[0].move(-distance_X);
+              while (steppers[0].isRunning() == 1){
+                  steppers[0].run();
+              }
+              delay(100);
+              //Serial.println("Move x negative");
+              b_move_complete = false;      
+             // Serial.println(".");
+            }
+          }
+        if (b<Y-1) {
+            steppers[1].move(distance_Y);
+              while (steppers[1].isRunning() == 1) {
+                  steppers[1].run();
+              }
+            delay(100);
+           // Serial.println("Move y");
+          }
+    }
+    X = 0;
+    Y = 0;
+    distance_X = 0;
+    distance_Y = 0;
+    go_home();
+ }
+
+ void go_home(){
+  //Serial.println("Going home.");
+    steppers[0].moveTo(0);
+    steppers[0].runToPosition();
+    steppers[1].moveTo(0);
+    steppers[1].runToPosition();
+  }
+
+void move_stepper(int idx, int distance_mm){
+  float distance;
+  if (distance_mm == 0) {
+    Serial.println("Not recognized: Height parameter not parsed");
+    return;
+  }
+  distance = distance_mm * 32 * 2.778;
+  Serial.println("moving");
+  Serial.println(distance);
+  Serial.println("Degrees");
+  Serial.println(idx);
+  if (idx == 0) { 
+    Serial.println(distance);
+    steppers[0].move(distance);
+    /*while (steppers[0].isRunning() == 1) {
+            steppers[0].run();
+    }*/
+    Serial.println("M0 knows the distance");
+  }
+  
+  if (idx == 1) {
+    Serial.println("moving step 1");
+    steppers[1].move(distance);
+    /*while (steppers[1].isRunning() == 1) {
+            steppers[1].run();
+    }*/
+    Serial.println("M1 knows the distance");
+  }
   }
